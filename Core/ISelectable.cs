@@ -1,5 +1,5 @@
-﻿using SolarSystemSim.Celestial;
-using ZeroElectric.Vinculum;
+﻿using Raylib_cs;
+using SolarSystemSim.Celestial;
 
 namespace SolarSystemSim.Core;
 

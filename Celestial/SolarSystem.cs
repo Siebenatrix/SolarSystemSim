@@ -1,17 +1,15 @@
-﻿using System.Diagnostics;
-using System.Globalization;
-using System.Numerics;
-using System.Text;
+﻿using System.Numerics;
 using SolarSystemSim.Core;
-using ZeroElectric.Vinculum;
-using static ZeroElectric.Vinculum.RayGui;
-using static ZeroElectric.Vinculum.Raylib;
+using static Raylib_cs.Raylib;
+using rlImGui_cs;
+using ImGuiNET;
+using Raylib_cs;
 
 namespace SolarSystemSim.Celestial;
 
 public class SolarSystem : Scene
 {
-    public static SolarSystem LoadFromFile(CelestialBody[] bodies, double gravConst)
+    public static SolarSystem LoadFromFile(CelestialBody[] bodies, double gravConst, string name)
     {
         var system = new SolarSystem();
         foreach (var body in bodies)
@@ -20,13 +18,14 @@ public class SolarSystem : Scene
             newBody.Name = body.Name;
             newBody.InitialColor = body.InitialColor;
             newBody.CurrentColor = newBody.InitialColor;
+            newBody.Size = body.Size;
         }
-        system.GravitationalConstant = gravConst;
-        system._gravitationalConstantBuffer = Encoding.UTF8.GetBytes(gravConst.ToString(CultureInfo.InvariantCulture) + " ");
+        system.GravitationalConstant = (float)gravConst;
+        system._systemName = name;
         return system;
     }
     
-    public double GravitationalConstant = 10.0f;
+    public float GravitationalConstant = 10.0f;
     public readonly List<CelestialBody> Bodies = [];
     public Camera2D Camera;
 
@@ -37,34 +36,27 @@ public class SolarSystem : Scene
     private bool _showPrediction = true;
     private CancellationTokenSource? _cts;
     private int _currentPredictedIterations;
-    
-    // GUI
-    private bool _iterationEditing;
-    private bool _gravConstEditing;
-    private bool _saveModalShown;
-    private readonly byte[] _saveNameBuffer = new byte[32];
-    
-    private bool _positionXEditing;
-    private bool _positionYEditing;
-    private bool _velocityXEditing;
-    private bool _velocityYEditing;
-    private bool _massEditing;
-    private bool _nameEditing;
-    
-    private byte[] _gravitationalConstantBuffer = new byte[8];
+    private bool _bodySettingsVisible;
+    private string _systemName = "Solar System";
+    private bool _shouldDrawStars = true;
+    private int _starsAmount = 500;
+    private int _starsBoundary = 2000;
+    private double _delta = 0.0001;
+    private int _simulationSpeed = 100;
+    private bool _isPredicting;
+    private double _predictStartTime;
+    private int _predictionSubsteps = 100;
 
-    private readonly byte[] _positionXBuffer = new byte[8];
-    private double _positionX;
-    private readonly byte[] _positionYBuffer = new byte[8];
-    private double _positionY;
-    private readonly byte[] _velocityXBuffer = new byte[8];
-    private double _velocityX;
-    private readonly byte[] _velocityYBuffer = new byte[8];
-    private double _velocityY;
-    private readonly byte[] _massBuffer = new byte[8];
-    private double _mass = 10;
-    private float _simulationsSpeed = 500.0f;
-    private readonly byte[] _nameBuffer = new byte[32];
+    private Vector2 _selectedBodyPos = Vector2.NegativeInfinity;
+    private Vector2 _selectedBodyVel = Vector2.NegativeInfinity;
+    private float _selectedBodyMass = float.NegativeInfinity;
+    private Vector3 _selectedBodyColor = Vector3.Zero;
+    private string _selectedBodyName = "Celestial Body";
+    private float _selectedBodySize = 10.0f;
+    private int _selectedBodyFeatherSteps = 16;
+    private int _selectedBodyTrailLength = 12;
+    
+    
 
     public CelestialBody AddBody(Vector2D position, Vector2D velocity, double mass)
     {
@@ -80,7 +72,7 @@ public class SolarSystem : Scene
     private void OnBodyEntered(CelestialBody body)
     {
         if(body.Selected) return;
-        body.CurrentColor = WHITE;
+        body.CurrentColor = Color.White;
     }
     
     private void OnBodyExited(CelestialBody body)
@@ -91,428 +83,304 @@ public class SolarSystem : Scene
     
     private void OnBodyClicked(CelestialBody body)
     {
-        if(body.Selected) return;
+        SelectBody(body);
+    }
+
+    private void SelectBody(CelestialBody? body)
+    {
         _selectedBody?.Selected = false;
         _selectedBody?.CurrentColor = _selectedBody.InitialColor;
         _selectedBody = null;
-        
-        body.Selected = true;
-        body.CurrentColor = BLUE;
-        
-        _positionX = body.State.Position.X;
-        Array.Clear(_positionXBuffer);
-        byte[] tempBytes = Encoding.UTF8.GetBytes(_positionX.ToString(CultureInfo.InvariantCulture));
-        Buffer.BlockCopy(tempBytes, 0, _positionXBuffer, 0, Math.Min(tempBytes.Length, _positionXBuffer.Length - 1));
-        
-        _positionY = body.State.Position.Y;
-        Array.Clear(_positionYBuffer);
-        tempBytes = Encoding.UTF8.GetBytes(_positionY.ToString(CultureInfo.InvariantCulture));
-        Buffer.BlockCopy(tempBytes, 0, _positionYBuffer, 0, Math.Min(tempBytes.Length, _positionYBuffer.Length - 1));
-        
-        _velocityX = body.State.Velocity.X;
-        Array.Clear(_velocityXBuffer);
-        tempBytes = Encoding.UTF8.GetBytes(_velocityX.ToString(CultureInfo.InvariantCulture));
-        Buffer.BlockCopy(tempBytes, 0, _velocityXBuffer, 0, Math.Min(tempBytes.Length, _velocityXBuffer.Length - 1));
-        
-        _velocityY = body.State.Velocity.Y;
-        Array.Clear(_velocityYBuffer);
-        tempBytes = Encoding.UTF8.GetBytes(_velocityY.ToString(CultureInfo.InvariantCulture));
-        Buffer.BlockCopy(tempBytes, 0, _velocityYBuffer, 0, Math.Min(tempBytes.Length, _velocityYBuffer.Length - 1));
-        
-        _mass = body.State.Mass;
-        Array.Clear(_massBuffer);
-        tempBytes = Encoding.UTF8.GetBytes(_mass.ToString(CultureInfo.InvariantCulture));
-        Buffer.BlockCopy(tempBytes, 0, _massBuffer, 0, Math.Min(tempBytes.Length, _massBuffer.Length - 1));
-        
-        Array.Clear(_nameBuffer);
-        tempBytes = Encoding.UTF8.GetBytes(body.Name.ToString(CultureInfo.InvariantCulture));
-        Buffer.BlockCopy(tempBytes, 0, _nameBuffer, 0, Math.Min(tempBytes.Length, _nameBuffer.Length - 1));
-        
-        _selectedBody = body;
+        _bodySettingsVisible = false;
+        if (body != null)
+        {
+            if(body.Selected) return;
+            _selectedBody?.Selected = false;
+            _selectedBody?.CurrentColor = _selectedBody.InitialColor;
+            _selectedBody = null;
+            
+            body.Selected = true;
+            body.CurrentColor = Color.Blue;
+            
+            _selectedBody = body;
+
+            _selectedBodyPos = (Vector2)body.State.Position;
+            _selectedBodyVel = (Vector2)body.State.Velocity;
+            _selectedBodyMass = (float)body.State.Mass;
+            _selectedBodyColor = new Vector3(body.InitialColor.R / 255.0f, body.InitialColor.G / 255.0f,
+                body.InitialColor.B / 255.0f);
+            _selectedBodySize = body.Size;
+            _selectedBodyName = body.Name;
+            _selectedBodyFeatherSteps = body.FeatherEffectAmount;
+            _selectedBodyTrailLength = body.MaxTrailLength;
+            _bodySettingsVisible = true;
+        }
+
     }
 
     public override void Load()
     {
-        Camera.zoom = 1.0f;
-        Camera.target = Vector2.Zero;
+        Camera.Zoom = 1.0f;
+        Camera.Target = Vector2.Zero;
     }
 
     public override void Update()
     {
         Vector2 mouseScreenPos = GetMousePosition();
         Vector2 mouseWorldPos = GetScreenToWorld2D(mouseScreenPos, Camera);
-        Camera.offset = mouseScreenPos;
-        Camera.target = mouseWorldPos;
+        Camera.Offset = mouseScreenPos;
+        Camera.Target = mouseWorldPos;
 
-        if (IsKeyPressed(KeyboardKey.KEY_F) && _selectedBody != null)
+        
+        // Moving Selected Body
+        if (IsKeyDown(KeyboardKey.LeftShift) && IsMouseButtonDown(MouseButton.Left) && _selectedBody != null &&
+            !_isSimulating)
         {
-            Camera.target = _selectedBody.State.Position.ToFloat();
-            Camera.zoom = 3.0f;
+            _selectedBodyPos = mouseWorldPos;
+            _selectedBody.InitialState.Position = _selectedBodyPos;
+            _selectedBody.State = _selectedBody.InitialState;
         }
         
-        if (IsMouseButtonDown(MouseButton.MOUSE_BUTTON_MIDDLE))
+        // Changing Velocity Y
+        if (IsKeyDown(KeyboardKey.LeftControl) && _selectedBody != null && !_isSimulating)
         {
-            Camera.target += -GetMouseDelta() / Camera.zoom;
+            if (IsKeyDown(KeyboardKey.LeftAlt))
+            {
+                _selectedBodyVel.X += GetMouseWheelMove();
+                _selectedBody.InitialState.Velocity = _selectedBodyVel;
+            }
+            else
+            {
+                _selectedBodyVel.Y += GetMouseWheelMove();
+                _selectedBody.InitialState.Velocity = _selectedBodyVel;
+            }
+            _selectedBody.State = _selectedBody.InitialState;
         }
         
-        if (IsMouseButtonPressed(MouseButton.MOUSE_BUTTON_LEFT) && IsKeyDown(KeyboardKey.KEY_LEFT_CONTROL))
+        // Change Mass
+        if (IsKeyDown(KeyboardKey.LeftAlt) && !IsKeyDown(KeyboardKey.LeftControl) && _selectedBody != null &&
+            !_isSimulating)
+        {
+            _selectedBodyMass += GetMouseWheelMove();
+            _selectedBody.InitialState.Mass = _selectedBodyMass;
+            _selectedBody.State = _selectedBody.InitialState;
+        }
+
+        // Focus
+        if (IsKeyPressed(KeyboardKey.F))
+        {
+            Camera.Target = _selectedBody != null ? _selectedBody.State.Position.ToFloat() : Vector2.Zero;
+            Camera.Zoom = 3.0f;
+        }
+        
+        // Panning
+        if (IsMouseButtonDown(MouseButton.Middle))
+        {
+            Camera.Target += -GetMouseDelta() / Camera.Zoom;
+        }
+        
+        // Add Body
+        if (IsMouseButtonPressed(MouseButton.Left) && IsKeyDown(KeyboardKey.LeftAlt) && !_isSimulating)
         {
             var mousePos = GetMousePosition();
             AddBody(GetScreenToWorld2D(mousePos, Camera), Vector2D.Zero, 10);
         }
 
-        if (IsKeyPressed(KeyboardKey.KEY_DELETE) && _selectedBody != null && !_isSimulating)
+        // Remove Body
+        if (IsKeyPressed(KeyboardKey.Delete) && _selectedBody != null && !_isSimulating)
         {
             if(_predictionPoints != null)
                 Array.Clear(_predictionPoints);
             _currentPredictedIterations = 0;
             _predictionPoints = null;
             Bodies.Remove(_selectedBody);
-            _selectedBody = null;
+            SelectBody(null);
         }
 
-        if (!IsKeyDown(KeyboardKey.KEY_LEFT_CONTROL) && !IsKeyDown(KeyboardKey.KEY_LEFT_ALT))
+        // Zooming
+        if (!IsKeyDown(KeyboardKey.LeftControl) && !IsKeyDown(KeyboardKey.LeftAlt))
         {
             float mouseScroll = GetMouseWheelMove();
-            Camera.zoom = MathF.Exp(MathF.Log(Camera.zoom) + mouseScroll * 0.1f);
-            Camera.zoom = Math.Clamp(Camera.zoom, 0.5f, 3.0f);
+            Camera.Zoom = MathF.Exp(MathF.Log(Camera.Zoom) + mouseScroll * 0.1f);
+            Camera.Zoom = Math.Clamp(Camera.Zoom, 0.5f, 3.0f);
         }
 
-        if (IsMouseButtonPressed(MouseButton.MOUSE_BUTTON_RIGHT))
+        // Deselect
+        if (IsMouseButtonPressed(MouseButton.Right))
         {
-            _selectedBody?.Selected = false;
-            _selectedBody?.CurrentColor = _selectedBody.InitialColor;
-            _selectedBody = null;
+            SelectBody(null);
         }
         
         foreach (var body in Bodies)
         {
             body.CheckSelectable(Camera);
         }
-        
-        if(_isSimulating)
+
+        if (_isSimulating)
             Simulate();
     }
     
     private void DrawGui()
     {
+        rlImGui.Begin();
+
+        DrawSimulationSettingsGui();
+
+        if(!_isSimulating)
+        {
+            DrawBodyPropertiesGui();
+
+            DrawSystemSettingsGui();
+        }
+        
+        rlImGui.End();
+    }
+
+    private void DrawSimulationSettingsGui()
+    {
+        ImGui.SetNextWindowPos(new Vector2(4, 4), ImGuiCond.FirstUseEver);
+        ImGui.SetNextWindowSize(new Vector2(300, 170), ImGuiCond.FirstUseEver);
+        ImGui.Begin("Simulation Settings");
+        ImGui.PushItemWidth(100f);
         if (_isSimulating)
         {
-            // Simulation Speed
-            GuiLabel(GuiHelper.NewRectangle(new Vector2(0.01f, 0.75f), new Vector2(0.15f, 0.77f)), "Simulation Speed");
-            GuiSlider(GuiHelper.NewRectangle(new Vector2(0.01f, 0.77f), new Vector2(0.15f, 0.79f)), null, null,
-                ref _simulationsSpeed, 0, 2000);
-            
-            // Toggle Prediction
-            if (GuiButton(GuiHelper.NewRectangle(new Vector2(0.01f, 0.8f), new Vector2(0.15f, 0.89f)),
-                    "Toggle Prediction") == 1)
-                _showPrediction = !_showPrediction;
-            
-            // Stop Simulation
-            if (GuiButton(GuiHelper.NewRectangle(new Vector2(0.01f, 0.9f), new Vector2(0.15f, 0.99f)), "Stop Simulation") == 1)
+            if (ImGui.Button("Stop Simulation"))
                 StopSimulation();
+            ImGui.SliderInt("Simulation Speed", ref _simulationSpeed, 1, 1000);
         }
         else
         {
-            // Back Button
-            if (GuiButton(GuiHelper.NewRectangle(new Vector2(0.01f), new Vector2(0.09f, 0.05f)), "Back") == 1)
-            {
-                Program.LoadScene(new MainMenu());
-                _cts?.Cancel();
-            }
-            
-            // Save Button
-            if (GuiButton(GuiHelper.NewRectangle(new Vector2(0.01f, 0.06f), new Vector2(0.09f, 0.1f)), "Save") == 1)
-            {
-                _saveModalShown = true;
-                Array.Clear(_saveNameBuffer);
-            }
-            
-            // Save Modal
-            bool cache = _saveModalShown;
-            if (_saveModalShown)
-            {
-                GuiEnable();
-                int textInput;
-
-                byte[] titleBuffer = "Save System"u8.ToArray();
-                byte[] messageBuffer = "What would you like to call this solar system?"u8.ToArray();
-                byte[] buttonBuffer = "Save"u8.ToArray();
-                unsafe
-                {
-                    fixed(byte* titlePtr = titleBuffer)
-                    fixed(byte* messagePtr = messageBuffer)
-                    fixed(byte* buttonPtr = buttonBuffer)
-                    fixed (byte* ptr = _saveNameBuffer)
-                    {
-                        textInput = GuiTextInputBox(GuiHelper.NewRectangle(new Vector2(0.35f), new Vector2(0.65f)),
-                            (sbyte*)titlePtr,
-                            (sbyte*)messagePtr,
-                            (sbyte*)buttonPtr,
-                            (sbyte*)ptr,
-                            _saveNameBuffer.Length,
-                            null
-                        );
-
-                    }
-                }
-
-                switch (textInput)
-                {
-                    case 0:
-                        _saveModalShown = false;
-                        break;
-                    case 1:
-                    {
-                        string fileName = Encoding.UTF8.GetString(_saveNameBuffer).TrimEnd('\0').Trim();
-                        if (!string.IsNullOrEmpty(Encoding.UTF8.GetString(_saveNameBuffer).TrimEnd('\0').Trim()))
-                        {
-                            _saveModalShown = false;
-                            _ = SaveManager.SaveSolarSystem(Bodies.ToArray(), GravitationalConstant, $"{fileName}.json");
-                        }
-
-                        break;
-                    }
-                }
-
-                GuiDisable();
-            }
-            if (cache != _saveModalShown)
-                GuiEnable();
-            
-            // Gravitational Constant
-            GuiLabel(GuiHelper.NewRectangle(new Vector2(0.85f, 0.01f), new Vector2(0.99f, 0.03f)),
-                "Grav. Const.");
-            unsafe
-            {
-                fixed (byte* ptr = _gravitationalConstantBuffer)
-                {
-                    if (GuiTextBox(GuiHelper.NewRectangle(new Vector2(0.85f, 0.03f), new Vector2(0.99f, 0.07f)),
-                            (sbyte*)ptr, _gravitationalConstantBuffer.Length, _gravConstEditing) == 1)
-                        _gravConstEditing = !_gravConstEditing;
-                }
-            }
-
-            if (float.TryParse(Encoding.UTF8.GetString(_gravitationalConstantBuffer), out float resultGravConst))
-            {
-                GravitationalConstant = resultGravConst;
-            }
-            
-            // Prediction Iterations
-            GuiLabel(GuiHelper.NewRectangle(new Vector2(0.01f, 0.73f), new Vector2(0.15f, 0.75f)),
-                "Prediction Iterations");
-            
-            if (GuiValueBox(GuiHelper.NewRectangle(new Vector2(0.01f, 0.75f), new Vector2(0.15f, 0.79f)), null,
-                    ref _predictionIterations, 0, 100000, _iterationEditing) == 1)
-                _iterationEditing = !_iterationEditing;
-            
-            // Predict Button
-            if (GuiButton(GuiHelper.NewRectangle(new Vector2(0.01f, 0.8f), new Vector2(0.15f, 0.89f)), "Predict") == 1)
-            {
-                _cts?.Cancel();
-                _ = Task.Run(() => Predict(_predictionIterations));
-            }
-            
-            // Start Simulation
-            if (GuiButton(GuiHelper.NewRectangle(new Vector2(0.01f, 0.9f), new Vector2(0.15f, 0.99f)), "Start Simulation") == 1)
+            if (ImGui.Button("Start Simulation"))
                 StartSimulation();
-        }
-
-        // Body Parameters
-        if (_selectedBody == null) return;
-        if (_isSimulating) return;
-        var panelStart = new Vector2(0.75f, 0.7f);
-        var panelEnd = new Vector2(0.99f, 0.99f);
-        var panelRect = GuiHelper.NewRectangle(panelStart, panelEnd);
-        
-        float mouseWheelMove = GetMouseWheelMove();
-        byte[] bytes = "Body Parameters"u8.ToArray();
-        unsafe
-        {
-            fixed (byte* ptr = bytes)
+            ImGui.InputDouble("Delta (Lower for accuracy)", ref _delta);
+            
+            ImGui.SeparatorText("Prediction");
+            if (_isPredicting)
             {
-                GuiPanel(panelRect, (sbyte*)ptr);
-            }
-        }
-
-        int itemCount = 6;
-        var offsetRect = panelRect with { Y = panelRect.Y + 20 };
-        offsetRect = GuiHelper.Shrink(offsetRect, 5);
-        
-        // Labels
-        var splitRectLabel = GuiHelper.SplitRectangleHor(offsetRect, 2, 0);
-        GuiLabel(GuiHelper.SplitRectangleVert(splitRectLabel, itemCount, 0), "Body Velocity");
-        GuiLabel(GuiHelper.SplitRectangleVert(splitRectLabel, itemCount, 1), "Body Position");
-        GuiLabel(GuiHelper.SplitRectangleVert(splitRectLabel, itemCount, 2), "Body Mass");
-        GuiLabel(GuiHelper.SplitRectangleVert(splitRectLabel, itemCount, 3), "Body Name");
-        GuiLabel(GuiHelper.SplitRectangleVert(splitRectLabel, itemCount, 4), "Body Color");
-        
-        // Property
-        var splitRectProperty = GuiHelper.SplitRectangleHor(offsetRect, 2, 1, -100);
-        
-        // Velocity
-        unsafe
-        {
-            fixed (byte* ptr = _velocityXBuffer)
-            {
-                if (GuiTextBox(
-                        GuiHelper.SplitRectangleHor(GuiHelper.SplitRectangleVert(splitRectProperty, itemCount, 0, 5), 2, 0),
-                        (sbyte*)ptr, _velocityXBuffer.Length,
-                        _velocityXEditing) == 1)
+                if (ImGui.Button("Stop Predicting"))
+                    StopPrediction();
+                ImGui.Text($"Steps: {_currentPredictedIterations}/{_predictionIterations}");
+                double timeElapsed = GetTime() - _predictStartTime;
+                if (timeElapsed != 0)
                 {
-                    _velocityXEditing = !_velocityXEditing;
+                    double stepsPerSecond = _currentPredictedIterations / timeElapsed;
+                    int stepsRemaining = _predictionIterations - _currentPredictedIterations;
+                    ImGui.Text($"Time Remaining: {Math.Round(stepsRemaining / stepsPerSecond, 2)} sec ({Math.Round(stepsPerSecond)} steps/sec)");
                 }
             }
-        }
-
-        if (float.TryParse(Encoding.UTF8.GetString(_velocityXBuffer), out float resultVelX))
-        {
-            _velocityX = resultVelX;
-        }
-
-        unsafe
-        {
-            fixed (byte* ptr = _velocityYBuffer)
-            {
-                if (GuiTextBox(
-                        GuiHelper.SplitRectangleHor(GuiHelper.SplitRectangleVert(splitRectProperty, itemCount, 0, 5), 2, 1),
-                        (sbyte*)ptr, _velocityYBuffer.Length,
-                        _velocityYEditing) == 1)
-                {
-                    _velocityYEditing = !_velocityYEditing;
-                }
-            }
-        }
-        
-        if (float.TryParse(Encoding.UTF8.GetString(_velocityYBuffer), out float resultVelY))
-        {
-            _velocityY = resultVelY;
-        }
-
-        if (mouseWheelMove != 0 && IsKeyDown(KeyboardKey.KEY_LEFT_CONTROL))
-        {
-            if(IsKeyDown(KeyboardKey.KEY_LEFT_ALT))
-                _velocityX += (int)mouseWheelMove;
             else
-                _velocityY += (int)mouseWheelMove;
-            
-            Array.Clear(_velocityXBuffer);
-            byte[] tempBytes = Encoding.UTF8.GetBytes(_velocityX.ToString(CultureInfo.InvariantCulture));
-            Buffer.BlockCopy(tempBytes, 0, _velocityXBuffer, 0, Math.Min(tempBytes.Length, _velocityXBuffer.Length - 1));
-        
-            Array.Clear(_velocityYBuffer);
-            tempBytes = Encoding.UTF8.GetBytes(_velocityY.ToString(CultureInfo.InvariantCulture));
-            Buffer.BlockCopy(tempBytes, 0, _velocityYBuffer, 0, Math.Min(tempBytes.Length, _velocityYBuffer.Length - 1));
-        }
-        
-        _selectedBody?.State.Velocity = new Vector2D(_velocityX, _velocityY);
-        _selectedBody?.InitialState = _selectedBody.State;
-
-        // Position
-        unsafe
-        {
-            fixed (byte* ptr = _positionXBuffer)
             {
-                if (GuiTextBox(
-                        GuiHelper.SplitRectangleHor(GuiHelper.SplitRectangleVert(splitRectProperty, itemCount, 1, 5), 2, 0),
-                        (sbyte*)ptr, _positionXBuffer.Length,
-                        _positionXEditing) == 1)
+                if (ImGui.Button("Start Predicting"))
+                    StartPrediction(_predictionIterations, _predictionSubsteps);
+                ImGui.SameLine();
+                if(ImGui.Button("Clear Prediction") && _predictionPoints != null)
                 {
-                    _positionXEditing = !_positionXEditing;
+                    _currentPredictedIterations = 0;
+                    Array.Clear(_predictionPoints);
                 }
+                if (ImGui.DragInt("Iterations", ref _predictionIterations))
+                    _predictionIterations = Math.Max(0, _predictionIterations);
+                if (ImGui.DragInt("Substeps", ref _predictionSubsteps))
+                    _predictionSubsteps = Math.Max(0, _predictionSubsteps);
             }
         }
-        
-        if (float.TryParse(Encoding.UTF8.GetString(_positionXBuffer), out float resultPosX))
-        {
-            _positionX = resultPosX;
-        }
-
-        unsafe
-        {
-            fixed (byte* ptr = _positionYBuffer)
-            {
-                if (GuiTextBox(
-                        GuiHelper.SplitRectangleHor(GuiHelper.SplitRectangleVert(splitRectProperty, itemCount, 1, 5), 2, 1),
-                        (sbyte*)ptr, _positionYBuffer.Length,
-                        _positionYEditing) == 1)
-                {
-                    _positionYEditing = !_positionYEditing;
-                }
-            }
-        }
-        
-        if (float.TryParse(Encoding.UTF8.GetString(_positionYBuffer), out float resultPosY))
-        {
-            _positionY = resultPosY;
-        }
-        
-        if (IsKeyDown(KeyboardKey.KEY_LEFT_SHIFT) && IsMouseButtonDown(MouseButton.MOUSE_BUTTON_LEFT) && !IsKeyDown(KeyboardKey.KEY_LEFT_CONTROL))
-        {
-            var mousePos = GetScreenToWorld2D(GetMousePosition(), Camera);
-            _positionX = mousePos.X;
-            _positionY = mousePos.Y;
-            
-            Array.Clear(_positionXBuffer);
-            byte[] tempBytes = Encoding.UTF8.GetBytes(_positionX.ToString(CultureInfo.InvariantCulture));
-            Buffer.BlockCopy(tempBytes, 0, _positionXBuffer, 0, Math.Min(tempBytes.Length, _positionXBuffer.Length - 1));
-        
-            Array.Clear(_positionYBuffer);
-            tempBytes = Encoding.UTF8.GetBytes(_positionY.ToString(CultureInfo.InvariantCulture));
-            Buffer.BlockCopy(tempBytes, 0, _positionYBuffer, 0, Math.Min(tempBytes.Length, _positionYBuffer.Length - 1));
-        }
-        
-        _selectedBody?.State.Position = new Vector2D(_positionX, _positionY);
-        _selectedBody?.InitialState = _selectedBody.State;
-        
-        // Mass
-        unsafe
-        {
-            fixed (byte* ptr = _massBuffer)
-            {
-                if(GuiTextBox(GuiHelper.SplitRectangleVert(splitRectProperty, itemCount, 2, 5), (sbyte*)ptr, _massBuffer.Length, _massEditing) == 1)
-                {
-                    _massEditing = !_massEditing;
-                }
-            }
-        }
-        
-        if (float.TryParse(Encoding.UTF8.GetString(_massBuffer), out float resultMass))
-        {
-            _mass = resultMass;
-        }
-        
-        
-        if (mouseWheelMove != 0 && !IsKeyDown(KeyboardKey.KEY_LEFT_CONTROL) && IsKeyDown(KeyboardKey.KEY_LEFT_ALT))
-        {
-            _mass += mouseWheelMove;
-            
-            Array.Clear(_massBuffer);
-            byte[] tempBytes = Encoding.UTF8.GetBytes(_mass.ToString(CultureInfo.InvariantCulture));
-            Buffer.BlockCopy(tempBytes, 0, _massBuffer, 0, Math.Min(tempBytes.Length, _massBuffer.Length - 1));
-        }
-        
-        _selectedBody?.State.Mass = _selectedBody.State.Mass = _mass;
-        _selectedBody?.InitialState = _selectedBody.State;
-        
-        // Name
-        unsafe
-        {
-            fixed (byte* ptr = _nameBuffer)
-            {
-                if(GuiTextBox(GuiHelper.SplitRectangleVert(splitRectProperty, itemCount, 3, 5), (sbyte*)ptr, _nameBuffer.Length, _nameEditing) == 1)
-                {
-                    _nameEditing = !_nameEditing;
-                }
-            }
-        }
-
-        _selectedBody?.Name = Encoding.UTF8.GetString(_nameBuffer);
+        ImGui.End();
     }
 
+    private void DrawSystemSettingsGui()
+    {
+        ImGui.SetNextWindowPos(new Vector2(4, 180), ImGuiCond.FirstUseEver);
+        ImGui.SetNextWindowSize(new Vector2(270, 280), ImGuiCond.FirstUseEver);
+        ImGui.Begin("System Settings");
+        ImGui.PushItemWidth(100f);
+        ImGui.Text($"FPS: {GetFPS()}");
+        if(ImGui.Button("Back To Menu"))
+        {
+            Program.LoadScene(new MainMenu());
+            StopPrediction();
+        }
+        ImGui.SeparatorText("System");
+        ImGui.DragFloat("Gravitational Constant", ref GravitationalConstant);
+        ImGui.SeparatorText("Saving");
+        ImGui.InputText("System Name", ref _systemName, 32);
+        if (ImGui.Button("Save System"))
+            _ = SaveManager.SaveSolarSystem(Bodies.ToArray(), GravitationalConstant, $"{_systemName}.json");
+        ImGui.SeparatorText("Stars");
+        ImGui.Checkbox("Draw Stars", ref _shouldDrawStars);
+        if (_shouldDrawStars)
+        {
+            ImGui.DragInt("Stars Amount", ref _starsAmount, 5, 0, int.MaxValue);
+            ImGui.DragInt("Stars Render Boundary", ref _starsBoundary, 10, 0, int.MaxValue);
+        }
+        ImGui.End();
+    }
+    
+    private void DrawBodyPropertiesGui()
+    {
+        if (_bodySettingsVisible)
+        {
+            ImGui.SetNextWindowPos(new Vector2(310, 4), ImGuiCond.FirstUseEver);
+            ImGui.SetNextWindowSize(new Vector2(240, 390), ImGuiCond.FirstUseEver);
+            ImGui.Begin("Body Settings", ref _bodySettingsVisible);
+            ImGui.PushItemWidth(150f);
+            ImGui.SeparatorText("Simulation");
+            if (ImGui.DragFloat2("Position", ref _selectedBodyPos, 0.1f))
+                _selectedBody?.InitialState.Position = _selectedBodyPos;
+            if (ImGui.DragFloat2("Velocity", ref _selectedBodyVel, 0.1f))
+                _selectedBody?.InitialState.Velocity = _selectedBodyVel;
+            if (ImGui.DragFloat("Mass", ref _selectedBodyMass, 0.1f, 0, float.MaxValue))
+                _selectedBody?.InitialState.Mass = _selectedBodyMass;
+            ImGui.SeparatorText("Visual");
+            if(ImGui.ColorPicker3("Color", ref _selectedBodyColor))
+            {
+                _selectedBody?.InitialColor = new Color(_selectedBodyColor.X, _selectedBodyColor.Y,
+                    _selectedBodyColor.Z);
+                _selectedBody?.CurrentColor = _selectedBody.InitialColor;
+            }
+            
+            _selectedBody?.State = _selectedBody.InitialState;
+            
+            if (ImGui.DragFloat("Size", ref _selectedBodySize, 0.1f, 0f, 200f))
+                _selectedBody?.Size = _selectedBodySize;
+            
+            if (ImGui.InputText("Name", ref _selectedBodyName, 32))
+                _selectedBody?.Name = _selectedBodyName;
+            
+            if (ImGui.InputInt("Feather Amount (Blur)", ref _selectedBodyFeatherSteps))
+            {
+                _selectedBodyFeatherSteps = Math.Clamp(_selectedBodyFeatherSteps, 1, 64);
+                _selectedBody?.FeatherEffectAmount = _selectedBodyFeatherSteps;
+            }
+            if(ImGui.InputInt("Trail Amount (Motion Blur)", ref _selectedBodyTrailLength))
+            {
+                _selectedBodyTrailLength = Math.Clamp(_selectedBodyTrailLength, 1, 64);
+                _selectedBody?.MaxTrailLength = _selectedBodyTrailLength;
+            }
+                
+            ImGui.End();
+        }
+        else
+        {
+            SelectBody(null);
+        }
+    }
+
+    private void DrawStars()
+    {
+        SetRandomSeed(0);
+        for (int i = 0; i < _starsAmount; i++)
+        {
+            var random = new Vector2(GetRandomValue(-_starsBoundary, _starsBoundary), GetRandomValue(-_starsBoundary, _starsBoundary));
+            DrawCircle((int)random.X, (int)random.Y, GetRandomValue(10, 20) * 0.1f, Color.White);
+        }
+    }
+    
     public override void Draw()
     {
         BeginMode2D(Camera);
+        if (_shouldDrawStars)
+            DrawStars();
+        
         foreach (var body in Bodies)
         {
             body.Draw();
@@ -523,12 +391,7 @@ public class SolarSystem : Scene
             for (var b = 0; b < _predictionPoints.Length; b++)
             {
                 var color = Bodies[b].CurrentColor;
-                var points = _predictionPoints[b];
-                unsafe
-                {
-                    fixed (Vector2* ptr = points)
-                        DrawLineStrip(ptr, _currentPredictedIterations + 1, color);
-                }
+                DrawLineStrip(_predictionPoints[b], _currentPredictedIterations + 1, color);
             }
         }
         EndMode2D();
@@ -538,7 +401,7 @@ public class SolarSystem : Scene
 
     private void StartSimulation()
     {
-        _cts?.Cancel();
+        StopPrediction();
         _isSimulating = true;
     }
     
@@ -561,9 +424,9 @@ public class SolarSystem : Scene
             currentStates[b] = Bodies[b].State;
         }
         
-        for (int step = 0; step < _simulationsSpeed; step++)
+        for (int step = 0; step < _simulationSpeed; step++)
         {
-            currentStates = Simulation.GetNextStepRk4(currentStates, GravitationalConstant, Program.FixedDelta);
+            currentStates = Simulation.GetNextStepRk4(currentStates, GravitationalConstant, _delta);
         }
 
         for (int b = 0; b < Bodies.Count; b++)
@@ -571,15 +434,31 @@ public class SolarSystem : Scene
             Bodies[b].State = currentStates[b];
         }
     }
+
+    private void StartPrediction(int iterations, int substeps)
+    {
+        _ = Task.Run(() => Predict(iterations, substeps));
+        _isPredicting = true;
+        _predictStartTime = GetTime();
+    }
     
-    private async Task Predict(int iterations, int substeps = 100)
+    private void StopPrediction()
     {
         _cts?.Cancel();
-        _cts?.Dispose();
+        _isPredicting = false;
+        _predictStartTime = 0.0;
+    }
+    
+    private async Task Predict(int iterations, int substeps)
+    {
+        if (_cts != null)
+        {
+            await _cts?.CancelAsync()!;
+            _cts?.Dispose();
+        }
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
         
-        iterations = Math.Clamp(iterations, 0, 100000);
         _currentPredictedIterations = 0;
         _predictionPoints = new Vector2[Bodies.Count][];
         var currentStates = new Simulation.StateVectors[Bodies.Count];
@@ -592,18 +471,16 @@ public class SolarSystem : Scene
             _predictionPoints[b] = new Vector2[iterations + 1];
             _predictionPoints[b][0] = (Vector2)body.State.Position;
         }
-
-        var frameTimer = Stopwatch.StartNew();
-
+        
         try
         {
             for (int i = 1; i <= iterations; i++)
             {
                 if (token.IsCancellationRequested) return;
-
-                for (int step = 0; step < substeps; step++)
+                
+                for (int s = 0; s < substeps; s++)
                 {
-                    currentStates = Simulation.GetNextStepRk4(currentStates, GravitationalConstant, Program.FixedDelta);
+                    currentStates = Simulation.GetNextStepRk4(currentStates, GravitationalConstant, _delta);
                 }
                 
                 for (int b = 0; b < currentStates.Length; b++)
@@ -612,15 +489,11 @@ public class SolarSystem : Scene
                 }
 
                 _currentPredictedIterations = i;
-                
-                if (frameTimer.Elapsed.TotalMilliseconds >= 16.67)
-                {
-                    await Task.Yield();
-                    frameTimer.Restart();
-                }
             }
 
             Console.WriteLine($"Predicted {Bodies.Count} Bodies with {iterations} iterations");
+            _isPredicting = false;
+            _predictStartTime = 0.0;
         }
         catch (Exception e)
         {

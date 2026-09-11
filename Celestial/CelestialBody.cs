@@ -1,14 +1,12 @@
 ﻿using System.Numerics;
+using Raylib_cs;
 using SolarSystemSim.Core;
-using ZeroElectric.Vinculum;
-using static ZeroElectric.Vinculum.Raylib;
+using static Raylib_cs.Raylib;
 
 namespace SolarSystemSim.Celestial;
 
 public class CelestialBody : ISelectable
 {
-    private const int FeatherAmount = 16;
-    
     public event Action<CelestialBody>? MouseEntered;
     public event Action<CelestialBody>? MouseExited;
     public event Action<CelestialBody>? Clicked;
@@ -33,35 +31,36 @@ public class CelestialBody : ISelectable
     public Simulation.StateVectors InitialState;
     public Simulation.StateVectors State;
     public float Size;
-    public Color InitialColor = GRAY;
-    public Color CurrentColor = GRAY;
+    public Color InitialColor = Color.Gray;
+    public Color CurrentColor = Color.Gray;
     public string Name = "Celestial Body";
 
     private Queue<Vector2> _positionHistory = new();
-    private int _maxTrailLength = 12;
+    public int MaxTrailLength = 12;
+    public int FeatherEffectAmount = 16;
     
     public void Draw()
     {
         _positionHistory.Enqueue(State.Position.ToFloat());
 
-        if (_positionHistory.Count > _maxTrailLength)
+        while (_positionHistory.Count > MaxTrailLength)
         {
             _positionHistory.Dequeue();
         }
         
-        BeginBlendMode(BlendMode.BLEND_ALPHA);
+        BeginBlendMode(BlendMode.Alpha);
 
         int queueIdx = 0;
         foreach (var pos in _positionHistory)
         {
             float trailProgress = (queueIdx + 1.0f) / _positionHistory.Count;
             
-            for (int i = 0; i < FeatherAmount; i++)
+            for (int i = 0; i < FeatherEffectAmount; i++)
             {
-                float normalized = (i + 1.0f) / FeatherAmount;
-                byte fadedAlpha = (byte)(normalized * 25 * trailProgress);
+                float normalized = (i + 1.0f) / FeatherEffectAmount;
+                byte fadedAlpha = (byte)(normalized * (255.0f / FeatherEffectAmount) * trailProgress);
                 
-                DrawCircleV(pos, normalized * Size, CurrentColor with { a = fadedAlpha });
+                DrawCircleV(pos, normalized * Size, CurrentColor with { A = fadedAlpha });
             }
 
             queueIdx++;
@@ -90,7 +89,7 @@ public class CelestialBody : ISelectable
             _isHovered = false;
         }
 
-        if (_isHovered && IsMouseButtonPressed(MouseButton.MOUSE_BUTTON_LEFT))
+        if (_isHovered && IsMouseButtonPressed(MouseButton.Left))
         {
             Clicked?.Invoke(this);
         }

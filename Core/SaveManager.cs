@@ -1,9 +1,6 @@
-﻿using System.Numerics;
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
+﻿using System.Text.Json;
+using Raylib_cs;
 using SolarSystemSim.Celestial;
-using ZeroElectric.Vinculum;
 
 namespace SolarSystemSim.Core;
 
@@ -40,7 +37,7 @@ public static class SaveManager
             b.InitialState.Velocity.Y,
             b.Size,
             b.InitialState.Mass,
-            b.InitialColor.r, b.InitialColor.g, b.InitialColor.b, b.InitialColor.a
+            b.InitialColor.R, b.InitialColor.G, b.InitialColor.B, b.InitialColor.A
         )).ToArray();
 
         var saveData = new SaveData(gravConst, bodyData);

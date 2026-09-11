@@ -6,10 +6,10 @@ public record struct Vector2D(double X, double Y)
 {
     public static Vector2D Zero => new Vector2D(0, 0);
 
-    public static Vector2D operator +(Vector2D a, Vector2D b) => new Vector2D(a.X + b.X, a.Y + b.Y);
-    public static Vector2D operator -(Vector2D a, Vector2D b) => new Vector2D(a.X - b.X, a.Y - b.Y);
-    public static Vector2D operator *(Vector2D a, double scalar) => new Vector2D(a.X * scalar, a.Y * scalar);
-    public static Vector2D operator /(Vector2D a, double scalar) => new Vector2D(a.X / scalar, a.Y / scalar);
+    public static Vector2D operator +(Vector2D a, Vector2D b) => new(a.X + b.X, a.Y + b.Y);
+    public static Vector2D operator -(Vector2D a, Vector2D b) => new(a.X - b.X, a.Y - b.Y);
+    public static Vector2D operator *(Vector2D a, double scalar) => new(a.X * scalar, a.Y * scalar);
+    public static Vector2D operator /(Vector2D a, double scalar) => new(a.X / scalar, a.Y / scalar);
 
     public static explicit operator Vector2(Vector2D v)
     {
@@ -28,5 +28,5 @@ public record struct Vector2D(double X, double Y)
         return v / Math.Sqrt(lenSq);
     }
     
-    public Vector2 ToFloat() => new System.Numerics.Vector2((float)X, (float)Y);
+    public Vector2 ToFloat() => new ((float)X, (float)Y);
 }

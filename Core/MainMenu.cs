@@ -1,7 +1,8 @@
 ﻿using System.Numerics;
 using SolarSystemSim.Celestial;
-using static ZeroElectric.Vinculum.Raylib;
-using static ZeroElectric.Vinculum.RayGui;
+using static Raylib_cs.Raylib;
+using ImGuiNET;
+using rlImGui_cs;
 
 namespace SolarSystemSim.Core;
 
@@ -16,14 +17,19 @@ public class MainMenu: Scene
 
     public override void Draw()
     {
+        rlImGui.Begin();
         if (Program.Frame % 120 == 0)
             FindSaveFiles();
-        
-        DrawText("Load Solar System:", GetScreenWidth() * 0.01f, GetScreenHeight() * 0.01f, 25.0f, WHITE);
-        if(GuiButton(GuiHelper.NewRectangle(new Vector2(0.01f, 0.05f), new Vector2(0.2f, 0.1f)), "Create New System") == 1)
+
+        ImGui.SetNextWindowPos(new Vector2(8, 8), ImGuiCond.FirstUseEver);
+        ImGui.SetNextWindowSize(new Vector2(300, 700), ImGuiCond.FirstUseEver);
+        ImGui.Begin("Load Solar System:");
+        if (ImGui.Button("Create New System"))
             Program.LoadScene(new SolarSystem());
 
         ShowSaves();
+        ImGui.End();
+        rlImGui.End();
     }
 
     private void ShowSaves()
@@ -32,12 +38,10 @@ public class MainMenu: Scene
         {
             string path = _saveFiles[s];
             string name = path.Replace("Saves\\", "");
-            if (GuiButton(
-                    GuiHelper.NewRectangle(new Vector2(0.01f, 0.06f * s + 0.11f), new Vector2(0.2f, 0.06f * s + 0.16f)),
-                    $"Load {name}") == 1)
+            if (ImGui.Button($"Load {name}"))
             {
                 var data = SaveManager.LoadSolarSystem(path);
-                Program.LoadScene(SolarSystem.LoadFromFile(data.Bodies, data.GravConst));
+                Program.LoadScene(SolarSystem.LoadFromFile(data.Bodies, data.GravConst, name.Replace(".json", "")));
             }
         }
     }

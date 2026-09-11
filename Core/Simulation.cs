@@ -1,6 +1,4 @@
-﻿using System.Numerics;
-
-namespace SolarSystemSim.Core;
+﻿namespace SolarSystemSim.Core;
 
 public static class Simulation
 {
@@ -52,20 +50,13 @@ public static class Simulation
         var newStates = new StateVectors[count];
 
         var k1Vel = new Vector2D[count];
-        var k1Acc = new Vector2D[count];
-
         var k2Vel = new Vector2D[count];
-        var k2Acc = new Vector2D[count];
-
         var k3Vel = new Vector2D[count];
-        var k3Acc = new Vector2D[count];
-
         var k4Vel = new Vector2D[count];
-        var k4Acc = new Vector2D[count];
 
         var tempStates = new StateVectors[count];
 
-        k1Acc = ComputeAccelerations(bodyStatesLastFrame, gravConst);
+        var k1Acc = ComputeAccelerations(bodyStatesLastFrame, gravConst);
         for (int i = 0; i < count; i++)
         {
             k1Vel[i] = bodyStatesLastFrame[i].Velocity;
@@ -78,7 +69,7 @@ public static class Simulation
             tempStates[i] = new StateVectors(tempPos, tempVel, bodyStatesLastFrame[i].Mass);
         }
 
-        k2Acc = ComputeAccelerations(tempStates, gravConst);
+        var k2Acc = ComputeAccelerations(tempStates, gravConst);
         for (int i = 0; i < count; i++)
         {
             k2Vel[i] = tempStates[i].Velocity;
@@ -91,7 +82,7 @@ public static class Simulation
             tempStates[i] = new StateVectors(tempPos, tempVel, bodyStatesLastFrame[i].Mass);
         }
 
-        k3Acc = ComputeAccelerations(tempStates, gravConst);
+        var k3Acc = ComputeAccelerations(tempStates, gravConst);
         for (int i = 0; i < count; i++)
         {
             k3Vel[i] = tempStates[i].Velocity;
@@ -104,7 +95,7 @@ public static class Simulation
             tempStates[i] = new StateVectors(tempPos, tempVel, bodyStatesLastFrame[i].Mass);
         }
 
-        k4Acc = ComputeAccelerations(tempStates, gravConst);
+        var k4Acc = ComputeAccelerations(tempStates, gravConst);
         for (int i = 0; i < count; i++)
         {
             k4Vel[i] = tempStates[i].Velocity;

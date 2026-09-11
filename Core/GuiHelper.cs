@@ -1,6 +1,6 @@
 ﻿using System.Numerics;
-using ZeroElectric.Vinculum;
-using static ZeroElectric.Vinculum.Raylib;
+using Raylib_cs;
+using static Raylib_cs.Raylib;
 
 namespace SolarSystemSim.Core;
 

@@ -5,15 +5,15 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Raylib-CSharp-Vinculum" Version="5.0.1" />
+      <PackageReference Include="ImGui.NET" Version="1.91.6.1" />
         <None Include="Saves\**">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
             <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
         </None>
+        <PackageReference Include="rlImgui-cs" Version="3.2.0" />
     </ItemGroup>
 
 </Project>
